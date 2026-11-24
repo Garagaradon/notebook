@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 外部との通信を一切禁止する設定（データ流出防止） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#2b4c7e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>パスワード帳</title>
+<style>
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --stripe: #f6f8fa;
+  --ink: #18212b;
+  --muted: #5b6672;
+  --line: #d5dbe1;
+  --accent: #2b4c7e;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3eaf4;
+  --danger: #a3302a;
+  --warn-bg: #fff3d1;
+  --warn-ink: #6b4e00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161b;
+    --surface: #1a2027;
+    --stripe: #1f262e;
+    --ink: #e6eaee;
+    --muted: #9aa5b1;
+    --line: #313a44;
+    --accent: #8fb0e0;
+    --accent-ink: #0d1a2c;
+    --accent-soft: #24324a;
+    --danger: #ef8a83;
+    --warn-bg: #3b3216;
+    --warn-ink: #f2d98a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+[hidden] { display: none !important; }
+h1 { font-size: 1.2rem; margin: 0; letter-spacing: .04em; }
+h2 { font-size: 1rem; margin: 0 0 .6rem; }
+.muted { color: var(--muted); }
+.center { text-align: center; }
+.spacer { flex: 1; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: .55rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+textarea { resize: vertical; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+button {
+  min-height: 44px;
+  padding: .5rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.ghost { background: transparent; }
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.small { min-height: 36px; padding: .25rem .75rem; font-size: .88rem; }
+
+/* ===== ロック画面 ===== */
+#lockScreen { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem 1rem; }
+.lock-card { width: 100%; max-width: 420px; }
+.lock-card > h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+.box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.1rem;
+  margin-top: 1rem;
+  display: grid;
+  gap: .65rem;
+}
+details.box > summary { font-weight: 700; }
+details.box[open] > summary { margin-bottom: .2rem; }
+.note { font-size: .82rem; color: var(--muted); margin: 0; }
+.msg { min-height: 1.6em; color: var(--danger); margin: .8rem 0 0; }
+
+/* ===== メイン画面 ===== */
+.topbar { position: sticky; top: 0; z-index: 5; }
+header {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .6rem 1rem;
+  padding-top: calc(.6rem + env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+/* 分類タブ（2段） */
+.tabs { background: var(--surface); transition: opacity .15s; }
+.tabs.searching { opacity: .45; }
+.tabrow { display: flex; gap: .3rem; overflow-x: auto; padding: .45rem 1rem 0; scrollbar-width: none; }
+.tabrow::-webkit-scrollbar { display: none; }
+.tab {
+  flex: none; min-height: 40px;
+  padding: .35rem 1.05rem;
+  border: 1px solid var(--line); border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--stripe); color: var(--muted);
+  font-weight: 600;
+}
+.tab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tabrow.sub {
+  gap: .4rem; padding: .45rem 1rem;
+  background: var(--accent-soft);
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+.subtab {
+  flex: none; min-height: 36px;
+  padding: .2rem .85rem;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent; font-size: .92rem;
+}
+.subtab.active { background: var(--surface); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.subtab .count { margin-left: .4rem; font-size: .75rem; color: var(--muted); font-weight: 400; }
+.tab.add, .subtab.add { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+.tab.add { border-bottom: none; }
+.path { display: block; font-size: .75rem; color: var(--muted); font-weight: 400; }
+.toolbar { display: flex; gap: .5rem; padding: .8rem 1rem .4rem; max-width: 1200px; margin: 0 auto; }
+.status { max-width: 1200px; margin: 0 auto; padding: 0 1rem .6rem; font-size: .8rem; color: var(--muted); }
+.backup-bar {
+  max-width: 1200px; margin: 0 auto .8rem; padding: 0 1rem;
+}
+.backup-bar > div {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  background: var(--warn-bg); color: var(--warn-ink);
+  border-radius: 10px; padding: .5rem .8rem; font-size: .88rem;
+}
+.list-wrap { padding: 0 1rem 6rem; max-width: 1200px; margin: 0 auto; }
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); }
+th, td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .82rem; color: var(--muted); font-weight: 600; background: var(--stripe); }
+tbody tr { cursor: pointer; }
+tbody tr:nth-child(even) td { background: var(--stripe); }
+td a { color: var(--accent); word-break: break-all; }
+td .val { word-break: break-all; }
+td button { margin-left: .35rem; }
+.mono { font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Consolas, monospace; }
+.note-cell { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted); }
+
+#addBtn .plus { font-weight: 700; }
+
+/* ===== スマホ表示 ===== */
+@media (max-width: 720px) {
+  header { padding-left: .8rem; padding-right: .6rem; }
+  header button { padding: .4rem .8rem; }
+  .toolbar { padding: .7rem .8rem .3rem; }
+  .tabrow { padding-left: .8rem; padding-right: .8rem; }
+  .status, .backup-bar { padding-left: .8rem; padding-right: .8rem; }
+  .list-wrap { padding: 0 .8rem 7rem; }
+  table, tbody, tr, td { display: block; }
+  thead { display: none; }
+  table { border: none; background: transparent; }
+  tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: .7rem;
+    padding: .55rem 0;
+  }
+  tbody tr:nth-child(even) td { background: transparent; }
+  td { border: none; padding: .2rem .9rem; display: flex; align-items: center; gap: .4rem; }
+  td.blank, td.t-textarea, td.t-url { display: none; }
+  td.t-rows { display: block; }
+  td.t-rows::before { display: none; }
+  .li-label { width: 6.5em; }
+  td::before {
+    content: attr(data-label);
+    flex: none; width: 5.5em;
+    font-size: .78rem; color: var(--muted);
+  }
+  td .val, td .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td:first-child { font-weight: 700; font-size: 1.08rem; padding-bottom: .35rem; flex-direction: column; align-items: flex-start; gap: 0; }
+  td:first-child::before { display: none; }
+  td button { margin-left: 0; }
+  td button.small { min-height: 40px; min-width: 4.2em; }
+  #addBtn {
+    position: fixed; z-index: 6;
+    right: 1.1rem; bottom: calc(1.2rem + env(safe-area-inset-bottom));
+    width: 60px; height: 60px; padding: 0;
+    border-radius: 50%;
+    font-size: 1.8rem; line-height: 1;
+    box-shadow: 0 3px 10px rgba(10, 30, 60, .3);
+  }
+  #addBtn .lbl { display: none; }
+}
+
+/* ===== ダイアログ ===== */
+dialog {
+  width: min(560px, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 2rem);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+dialog::backdrop { background: rgba(10, 16, 24, .45); }
+.dlg-head {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .8rem 1rem .8rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.dlg-head h2 { margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.dlg-body { padding: 1rem 1.2rem; display: grid; gap: .95rem; align-content: start; }
+.dlg-foot {
+  display: flex; gap: .5rem; padding: .8rem 1.2rem;
+  padding-bottom: calc(.8rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  position: sticky; bottom: 0; background: var(--surface);
+}
+@media (max-width: 720px) {
+  dialog {
+    width: 100vw; max-width: 100vw;
+    height: 100dvh; max-height: 100dvh;
+    margin: 0; border: none; border-radius: 0;
+  }
+  dialog[open] { display: flex; flex-direction: column; }
+  .dlg-head { padding-top: calc(.8rem + env(safe-area-inset-top)); }
+  dialog.small-dlg {
+    width: calc(100vw - 1.5rem); height: auto; max-height: calc(100dvh - 2rem);
+    margin: auto; border: 1px solid var(--line); border-radius: 14px;
+  }
+  dialog.small-dlg .dlg-head { padding-top: .8rem; }
+  .dlg-body { flex: 1; overflow-y: auto; }
+}
+.field label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .25rem; }
+.inline { display: flex; gap: .4rem; align-items: center; }
+.inline > input { flex: 1; min-width: 0; }
+.hint { font-size: .8rem; color: var(--muted); margin: .25rem 0 0; }
+
+/* ログイン情報（1行3列×5段） */
+.rows-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr) auto minmax(0, .9fr);
+  gap: .3rem; align-items: center;
+}
+.rows-grid .rh { font-size: .78rem; color: var(--muted); }
+.rows-grid input { min-height: 40px; padding: .4rem .5rem; font-size: .92rem; }
+.rows-grid button.small { min-height: 40px; padding: .2rem .5rem; }
+input.secret { -webkit-text-security: disc; }
+.rows-grid.reveal input.secret { -webkit-text-security: none; }
+.rows-tools { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin-top: .3rem; }
+.li-row { display: flex; align-items: center; gap: .5rem; min-height: 40px; }
+.li-label { flex: none; width: 7.5em; font-size: .82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li-val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 詳細表示 */
+.view-item { border-bottom: 1px solid var(--line); padding-bottom: .8rem; }
+.view-item:last-child { border-bottom: none; }
+.view-label { font-size: .8rem; color: var(--muted); }
+.view-val { font-size: 1.05rem; overflow-wrap: anywhere; white-space: pre-wrap; margin: .1rem 0 .45rem; }
+.view-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.view-actions button { flex: 1; min-width: 7em; }
+.open-site { display: block; text-align: center; text-decoration: none; padding: .7rem; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+/* パスワード生成 */
+.gen {
+  margin-top: .5rem; padding: .85rem;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  display: grid; gap: .55rem;
+}
+.gen .inline label { margin: 0; white-space: nowrap; color: var(--ink); }
+.gen input[type=number] { width: 6rem; flex: none; }
+.checks { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; }
+label.chk { display: inline-flex; align-items: center; gap: .4rem; min-height: 36px; font-size: .95rem; color: var(--ink); margin: 0; }
+label.chk input { width: 1.2rem; height: 1.2rem; min-height: 0; }
+
+/* 設定 */
+.set-section { border-top: 1px solid var(--line); padding-top: .95rem; display: grid; gap: .55rem; }
+.set-section:first-child { border-top: none; padding-top: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 9.5rem auto auto auto; gap: .35rem; align-items: center; }
+@media (max-width: 560px) {
+  .field-row { grid-template-columns: 1fr auto auto auto; }
+  .field-row select { grid-column: 1 / -1; grid-row: 2; }
+  .field-row { padding-bottom: .5rem; border-bottom: 1px dashed var(--line); }
+}
+pre {
+  font-size: .75rem; overflow-x: auto;
+  background: var(--stripe); padding: .7rem; border-radius: 6px; margin: .5rem 0 0;
+}
+details summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(5.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: var(--ink); color: var(--bg);
+  padding: .65rem 1.1rem; border-radius: 10px;
+  font-size: .9rem; max-width: calc(100vw - 2rem); width: max-content;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+  z-index: 100;
+}
+#toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #toast, .tabs { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <div class="lock-card">
+    <h1>パスワード帳</h1>
+    <p class="muted" style="margin:0">データは暗号化してこの端末の中だけに保存します。外部には送信しません。</p>
+
+    <section class="box" id="unlockBox" hidden>
+      <h2 style="margin:0">マスターパスワードを入力</h2>
+      <input type="password" id="unlockPw" placeholder="マスターパスワード" autocomplete="current-password">
+      <button class="primary" id="unlockBtn">開く</button>
+    </section>
+
+    <section class="box" id="createBox" hidden>
+      <h2 style="margin:0">新しく作る</h2>
+      <input type="password" id="newPw" placeholder="マスターパスワード（12文字以上がおすすめ）" autocomplete="new-password">
+      <input type="password" id="newPw2" placeholder="確認のためもう一度" autocomplete="new-password">
+      <button class="primary" id="createBtn">作成する</button>
+      <p class="note">マスターパスワードを忘れると、誰にも中身を取り出せません。紙に書いて自宅の安全な場所に保管してください。</p>
+    </section>
+
+    <details class="box" id="restoreBox">
+      <summary>バックアップファイルから復元</summary>
+      <p class="note" id="restoreNote" hidden>この端末にあるデータは、選んだファイルの内容に置き換わります。</p>
+      <input type="file" id="restoreFile">
+      <input type="password" id="restorePw" placeholder="そのファイルのマスターパスワード" autocomplete="current-password">
+      <button id="restoreBtn">復元する</button>
+    </details>
+
+    <p class="center" style="margin-top:1.2rem"><button class="ghost danger small" id="wipeBtn" hidden>この端末のデータを削除</button></p>
+    <p class="msg" id="lockMsg" role="status"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <div class="topbar">
+    <header>
+      <h1>パスワード帳</h1>
+      <div class="spacer"></div>
+      <button id="lockBtn">ロック</button>
+      <button id="settingsBtn">設定</button>
+    </header>
+    <nav class="tabs" id="tabsWrap" aria-label="分類">
+      <div class="tabrow" id="tabs1"></div>
+      <div class="tabrow sub" id="tabs2"></div>
+    </nav>
+  </div>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="検索" autocomplete="off" autocapitalize="none" spellcheck="false">
+    <button class="primary" id="addBtn" aria-label="新しく登録"><span class="plus">＋</span><span class="lbl"> 追加</span></button>
+  </div>
+  <div class="backup-bar" id="backupBar" hidden>
+    <div><span class="spacer" id="backupText">前回のバックアップ以降に変更があります</span><button class="small" id="backupBtn2">バックアップ</button></div>
+  </div>
+  <p class="status" id="status"></p>
+  <div class="list-wrap">
+    <table id="table"><thead></thead><tbody></tbody></table>
+    <p id="empty" class="muted center" hidden></p>
+  </div>
+</div>
+
+<dialog id="editDlg"></dialog>
+<dialog id="settingsDlg"></dialog>
+<dialog id="tabDlg" class="small-dlg"></dialog>
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+// ===== 定数・状態 =====
+const ITER = 600000;                 // PBKDF2 の反復回数（総当たり対策）
+const FORMAT = 'pw-notebook';
+const KEY = 'pw-notebook-vault';     // 端末に保存する暗号化データ
+const META = 'pw-notebook-meta';     // バックアップ日時など（秘密情報なし）
+const te = new TextEncoder(), td = new TextDecoder();
+const $ = id => document.getElementById(id);
+const TYPES = [['text', 'テキスト'], ['url', 'URL'], ['password', 'パスワード（伏せ字）'], ['textarea', 'メモ（複数行）']];
+const MASK = '••••••••';
+
+const S = { vault: null, key: null, salt: null, iter: ITER, lockedObj: null, cur: {} };
+let meta = { lastBackup: 0, changed: false, cur: null };
+
+const storageOK = (() => {
+  try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; } catch { return false; }
+})();
+function loadStored() {
+  if (!storageOK) return null;
+  try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; }
+}
+function loadMeta() {
+  if (!storageOK) return;
+  try { Object.assign(meta, JSON.parse(localStorage.getItem(META)) || {}); } catch {}
+}
+function saveMeta() { if (storageOK) try { localStorage.setItem(META, JSON.stringify(meta)); } catch {} }
+
+// ===== 小道具 =====
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k in e) e[k] = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) {
+    if (c == null || c === false) continue;
+    e.append(c instanceof Node ? c : String(c));
+  }
+  return e;
+}
+const uid = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+function toast(t, ms = 2600) {
+  const x = $('toast'); x.textContent = t; x.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => x.classList.remove('show'), ms);
+}
+const lockMsg = t => { $('lockMsg').textContent = t; };
+function busy(on) {
+  document.querySelectorAll('#lockScreen button').forEach(b => b.disabled = on);
+  if (on) lockMsg('処理中…');
+}
+function ymd() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+}
+function download(blob, name) {
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+const fmtDate = t => t ? new Date(t).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'まだありません';
+
+// ===== 暗号化（AES-256-GCM / PBKDF2-SHA256） =====
+function b64(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s);
+}
+function unb64(s) {
+  const bin = atob(s), b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return b;
+}
+async function deriveKey(pw, salt, iter) {
+  const base = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptVault() {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, S.key, te.encode(JSON.stringify(S.vault)));
+  return {
+    format: FORMAT, version: 1,
+    kdf: 'PBKDF2-SHA256', iterations: S.iter, salt: b64(S.salt),
+    cipher: 'AES-256-GCM', iv: b64(iv), data: b64(ct)
+  };
+}
+async function decryptObj(obj, pw) {
+  if (!obj || obj.format !== FORMAT) throw new Error('format');
+  const salt = unb64(obj.salt);
+  const key = await deriveKey(pw, salt, obj.iterations);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(obj.iv) }, key, unb64(obj.data));
+  return { vault: JSON.parse(td.decode(pt)), key, salt, iter: obj.iterations };
+}
+
+// ===== データ =====
+function newVault() {
+  return {
+    fields: [
+      { id: 'name', label: 'サイト名', type: 'text' },
+      { id: 'url', label: 'URL', type: 'url' },
+      { id: 'note', label: 'メモ', type: 'textarea' }
+    ],
+    rowsMigrated: true,
+    groups: [
+      { id: uid(), name: '個人', subs: [{ id: uid(), name: '銀行・お金' }, { id: uid(), name: '買い物' }, { id: uid(), name: 'その他' }] },
+      { id: uid(), name: '仕事', subs: [{ id: uid(), name: '全般' }] }
+    ],
+    entries: [],
+    settings: { autoLockMin: 5 }
+  };
+}
+function normalize(v) {
+  v.fields = v.fields && v.fields.length ? v.fields : newVault().fields;
+  v.entries = v.entries || [];
+  v.settings = Object.assign({ autoLockMin: 5 }, v.settings || {});
+  // 旧形式のID・パスワード列を「ログイン情報（項目名・値・メモ）」へ移す
+  if (!v.rowsMigrated) {
+    const first = v.fields[0];
+    const conv = v.fields.filter(f => f !== first && (f.type === 'text' || f.type === 'password'));
+    v.entries.forEach(e => {
+      e.rows = e.rows || [];
+      conv.forEach(f => { const x = e.values[f.id]; if (x) e.rows.push({ label: f.label, value: x, memo: '' }); delete e.values[f.id]; });
+    });
+    v.fields = v.fields.filter(f => !conv.includes(f));
+    if (!v.fields.length) v.fields = [{ id: 'name', label: 'サイト名', type: 'text' }];
+    v.rowsMigrated = true;
+  }
+  v.entries.forEach(e => { e.rows = e.rows || []; e.values = e.values || {}; });
+  // 分類のない古いデータは「未分類 › 全般」にまとめる
+  if (!v.groups || !v.groups.length) v.groups = [{ id: uid(), name: '未分類', subs: [] }];
+  v.groups.forEach(g => { if (!g.subs || !g.subs.length) g.subs = [{ id: uid(), name: '全般' }]; });
+  v.entries.forEach(e => {
+    const g = v.groups.find(x => e.cat && x.id === e.cat.g) || v.groups[0];
+    const s = g.subs.find(x => e.cat && x.id === e.cat.s) || g.subs[0];
+    e.cat = { g: g.id, s: s.id };
+  });
+  return v;
+}
+// 選択中のタブ（存在しなければ先頭）
+function ensureCur() {
+  const v = S.vault;
+  const g = v.groups.find(x => x.id === S.cur.g) || v.groups[0];
+  const s = g.subs.find(x => x.id === S.cur.s) || g.subs[0];
+  S.cur = { g: g.id, s: s.id };
+  meta.cur = S.cur; saveMeta();
+  return { g, s };
+}
+// 項目名からパスワード類かを判断して伏せ字にする
+const isSecret = label => /パスワード|ﾊﾟｽﾜｰﾄﾞ|暗証|pin|pass|pw/i.test(label || '');
+// ログイン情報を入れる位置（URL列の後ろ、なければ先頭列の後ろ）
+const rowsPos = fields => { const i = fields.findIndex(f => f.type === 'url'); return (i >= 0 ? i : 0) + 1; };
+function catPath(e) {
+  const g = S.vault.groups.find(x => x.id === e.cat.g), s = g && g.subs.find(x => x.id === e.cat.s);
+  return g && s ? `${g.name} › ${s.name}` : '';
+}
+// 変更のたびに暗号化して端末へ自動保存
+async function persist() {
+  if (!storageOK || !S.vault) return;
+  try { localStorage.setItem(KEY, JSON.stringify(await encryptVault())); }
+  catch { toast('端末への保存に失敗しました。バックアップを書き出してください', 4000); }
+}
+async function changed() {
+  meta.changed = true; saveMeta();
+  await persist();
+  updateBars();
+}
+function updateBars() {
+  $('backupBar').hidden = !meta.changed;
+  $('backupText').textContent = meta.lastBackup ? '前回のバックアップ以降に変更があります' : 'まだバックアップがありません';
+  $('status').textContent = storageOK
+    ? '変更はこの端末に自動で保存されます（暗号化済み）'
+    : 'この開き方では端末に保存できません。閉じる前に必ず「バックアップ」で書き出してください。';
+}
+
+// ===== 画面切り替え =====
+function showLockScreen() {
+  const has = !!S.lockedObj;
+  $('unlockBox').hidden = !has;
+  $('createBox').hidden = has;
+  $('restoreBox').open = false;
+  $('restoreNote').hidden = !has;
+  $('wipeBtn').hidden = !has;
+  $('app').hidden = true;
+  $('lockScreen').hidden = false;
+  lockMsg('');
+  ['unlockPw', 'newPw', 'newPw2', 'restorePw'].forEach(id => $(id).value = '');
+  $('restoreFile').value = '';
+}
+function enterApp() {
+  ['unlockPw', 'newPw', 'newPw2', 'restorePw'].forEach(id => $(id).value = '');
+  $('restoreFile').value = '';
+  lockMsg('');
+  S.lockedObj = null;
+  $('lockScreen').hidden = true;
+  $('app').hidden = false;
+  $('search').value = '';
+  lastAct = Date.now();
+  S.cur = meta.cur || {};
+  updateBars();
+  refresh();
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
+function closeDialogs() { document.querySelectorAll('dialog').forEach(d => d.open && d.close()); }
+
+async function lock() {
+  if (!S.vault) return;
+  closeDialogs();
+  S.lockedObj = await encryptVault();   // 端末保存ができない環境でも、ロック中は暗号化して保持
+  S.vault = null; S.key = null;
+  $('table').tHead.replaceChildren();
+  $('table').tBodies[0].replaceChildren();
+  showLockScreen();
+}
+function adopt(r) {
+  Object.assign(S, { vault: normalize(r.vault), key: r.key, salt: r.salt, iter: r.iter });
+}
+
+// ===== ロック画面の操作 =====
+$('unlockBtn').onclick = async () => {
+  busy(true);
+  try {
+    adopt(await decryptObj(S.lockedObj, $('unlockPw').value));
+    enterApp();
+  } catch {
+    lockMsg('マスターパスワードが違います');
+  } finally { busy(false); }
+};
+$('createBtn').onclick = async () => {
+  const p = $('newPw').value, p2 = $('newPw2').value;
+  if (p.length < 8) return lockMsg('マスターパスワードは8文字以上にしてください（12文字以上がおすすめ）');
+  if (p !== p2) return lockMsg('確認用のパスワードが一致しません');
+  busy(true);
+  try {
+    S.salt = crypto.getRandomValues(new Uint8Array(16));
+    S.iter = ITER;
+    S.key = await deriveKey(p, S.salt, S.iter);
+    S.vault = newVault();
+    meta = { lastBackup: 0, changed: false };
+    await changed();
+    enterApp();
+    toast('作成しました。右下の「＋」から登録できます', 4000);
+  } catch (e) {
+    lockMsg('作成できませんでした：' + e.message);
+  } finally { busy(false); }
+};
+$('restoreBtn').onclick = async () => {
+  const f = $('restoreFile').files[0];
+  if (!f) return lockMsg('バックアップファイルを選んでください');
+  if (S.lockedObj && !confirm('この端末にあるデータを、選んだファイルの内容で置き換えます。よろしいですか？')) return;
+  busy(true);
+  try {
+    const obj = JSON.parse(await f.text());
+    adopt(await decryptObj(obj, $('restorePw').value));
+    meta = { lastBackup: Date.now(), changed: false }; saveMeta();
+    await persist();
+    enterApp();
+    toast('復元しました');
+  } catch (e) {
+    lockMsg(e.message === 'format' ? 'このツールのバックアップファイルではありません'
+      : 'マスターパスワードが違うか、ファイルが壊れています');
+  } finally { busy(false); }
+};
+$('wipeBtn').onclick = () => {
+  if (!confirm('この端末に保存されているパスワード帳を削除します。バックアップファイルがなければ元に戻せません。削除しますか？')) return;
+  if (storageOK) { localStorage.removeItem(KEY); localStorage.removeItem(META); }
+  S.lockedObj = null; meta = { lastBackup: 0, changed: false };
+  showLockScreen();
+  toast('削除しました');
+};
+[['unlockPw', 'unlockBtn'], ['newPw2', 'createBtn'], ['restorePw', 'restoreBtn']].forEach(([i, b]) =>
+  $(i).addEventListener('keydown', e => { if (e.key === 'Enter') $(b).click(); }));
+
+// ===== 一覧表示 =====
+function cell(f, e, isFirst, showPath) {
+  const val = e.values[f.id] || '';
+  const tdEl = el('td', { 'data-label': f.label, class: 't-' + f.type });
+  if (!val) { tdEl.classList.add('blank'); return tdEl; }
+  if (f.type === 'url') {
+    if (/^https?:\/\//i.test(val)) tdEl.append(el('a', { href: val, target: '_blank', rel: 'noopener noreferrer', text: val }));
+    else tdEl.append(el('span', { class: 'val', text: val }));
+  } else if (f.type === 'password') {
+    tdEl.append(el('span', { class: 'mono', text: MASK }),
+      el('button', { class: 'small', text: 'コピー', onclick: () => copyText(val, f.label) }));
+  } else if (f.type === 'textarea') {
+    tdEl.append(el('span', { class: 'note-cell', text: val }));
+  } else {
+    tdEl.append(el('span', { class: 'val', text: val }));
+    if (isFirst && showPath) tdEl.append(el('span', { class: 'path', text: catPath(e) }));
+    if (!isFirst) tdEl.append(el('button', { class: 'small ghost', text: 'コピー', onclick: () => copyText(val, f.label) }));
+  }
+  return tdEl;
+}
+function rowsCell(e) {
+  const tdEl = el('td', { 'data-label': 'ログイン情報', class: 't-rows' });
+  const rows = (e.rows || []).filter(r => r.value);
+  if (!rows.length) { tdEl.classList.add('blank'); return tdEl; }
+  tdEl.append(...rows.map(r => el('div', { class: 'li-row' },
+    el('span', { class: 'li-label', text: r.label || '（項目名なし）' }),
+    el('span', { class: 'li-val' + (isSecret(r.label) ? ' mono' : ''), text: isSecret(r.label) ? MASK : r.value }),
+    el('button', { class: 'small', text: 'コピー', onclick: () => copyText(r.value, r.label || '値') }))));
+  return tdEl;
+}
+function render() {
+  const v = S.vault; if (!v) return;
+  const q = $('search').value.trim().toLowerCase();
+  const pos = rowsPos(v.fields);
+  const ths = v.fields.map(f => el('th', { text: f.label }));
+  ths.splice(pos, 0, el('th', { text: 'ログイン情報' }));
+  $('table').tHead.replaceChildren(el('tr', {}, ths));
+  const searchable = v.fields.filter(f => f.type !== 'password');
+  const searching = !!q;
+  $('tabsWrap').classList.toggle('searching', searching);
+  // 検索中はすべての分類から探す。それ以外は選択中のタブだけ表示
+  let list = v.entries.filter(e => searching
+    ? (searchable.some(f => (e.values[f.id] || '').toLowerCase().includes(q))
+      || e.rows.some(r => [r.label, r.memo, isSecret(r.label) ? '' : r.value].some(x => (x || '').toLowerCase().includes(q))))
+    : e.cat.g === S.cur.g && e.cat.s === S.cur.s);
+  const first = v.fields[0];
+  list = [...list].sort((a, b) => (a.values[first.id] || '').localeCompare(b.values[first.id] || '', 'ja'));
+  $('table').tBodies[0].replaceChildren(...list.map(e => {
+    const tds = v.fields.map((f, i) => cell(f, e, i === 0, searching));
+    tds.splice(pos, 0, rowsCell(e));
+    return el('tr', { onclick: ev => { if (!ev.target.closest('button, a')) openEdit(e); } }, tds);
+  }));
+  $('table').hidden = list.length === 0;
+  const empty = $('empty');
+  empty.hidden = list.length > 0;
+  empty.textContent = searching ? 'どの分類にも、検索に一致する項目がありません。'
+    : 'この分類にはまだ登録がありません。右下の「＋」から登録できます。選択中のタブをもう一度タップすると、名前の変更・並べ替え・削除ができます。';
+}
+function refresh() { renderTabs(); render(); }
+
+// ===== 分類タブ =====
+function renderTabs() {
+  const v = S.vault, { g: cg, s: cs } = ensureCur();
+  $('tabs1').replaceChildren(...v.groups.map(g => el('button', {
+    class: 'tab' + (g === cg ? ' active' : ''), text: g.name,
+    title: g === cg ? 'もう一度タップで名前の変更など' : null,
+    onclick: () => {
+      if (g === cg && !$('search').value) return openTabEdit('g', g);
+      S.cur = { g: g.id, s: g.subs[0].id }; $('search').value = ''; refresh();
+    } })),
+    el('button', { class: 'tab add', text: '＋', 'aria-label': '大分類を追加', onclick: () => openTabEdit('g', null) }));
+  $('tabs2').replaceChildren(...cg.subs.map(s => {
+    const n = v.entries.filter(e => e.cat.g === cg.id && e.cat.s === s.id).length;
+    return el('button', {
+      class: 'subtab' + (s === cs ? ' active' : ''),
+      title: s === cs ? 'もう一度タップで名前の変更など' : null,
+      onclick: () => {
+        if (s === cs && !$('search').value) return openTabEdit('s', s);
+        S.cur.s = s.id; $('search').value = ''; refresh();
+      } }, s.name, el('span', { class: 'count', text: String(n) }));
+  }), el('button', { class: 'subtab add', text: '＋', 'aria-label': '小分類を追加', onclick: () => openTabEdit('s', null) }));
+  for (const row of ['tabs1', 'tabs2']) {
+    const a = $(row).querySelector('.active');
+    if (a) $(row).scrollLeft = Math.max(0, a.offsetLeft - 40);
+  }
+}
+function openTabEdit(kind, item) {
+  const v = S.vault, dlg = $('tabDlg'), { g: cg } = ensureCur();
+  const isNew = !item;
+  const arr = kind === 'g' ? v.groups : cg.subs;
+  const label = kind === 'g' ? '大分類（上の段）' : `小分類（「${cg.name}」の中）`;
+  const name = el('input', { type: 'text', value: isNew ? '' : item.name, placeholder: '名前（例：銀行、仕事、趣味）' });
+  const save = async () => {
+    const n = name.value.trim();
+    if (!n) return toast('名前を入力してください');
+    if (isNew) {
+      const obj = { id: uid(), name: n };
+      if (kind === 'g') { obj.subs = [{ id: uid(), name: '全般' }]; v.groups.push(obj); S.cur = { g: obj.id, s: obj.subs[0].id }; }
+      else { cg.subs.push(obj); S.cur.s = obj.id; }
+    } else item.name = n;
+    dlg.close(); refresh();
+    await changed();
+    toast(isNew ? `「${n}」を追加しました` : '名前を変更しました');
+  };
+  name.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+  const move = d => {
+    const i = arr.indexOf(item), j = i + d;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    refresh(); changed();
+  };
+  const del = async () => {
+    if (arr.length <= 1) return toast('分類は最低1つ必要です');
+    const hit = v.entries.filter(e => kind === 'g' ? e.cat.g === item.id : (e.cat.g === cg.id && e.cat.s === item.id));
+    if (!confirm(hit.length ? `「${item.name}」を削除します。中の${hit.length}件も一緒に削除されます。よろしいですか？` : `「${item.name}」を削除しますか？`)) return;
+    v.entries = v.entries.filter(e => !hit.includes(e));
+    arr.splice(arr.indexOf(item), 1);
+    dlg.close(); refresh();
+    await changed();
+    toast('削除しました');
+  };
+  dlg.replaceChildren(
+    el('div', { class: 'dlg-head' }, el('h2', { text: isNew ? '分類を追加' : '分類の編集' }), el('div', { class: 'spacer' }),
+      el('button', { class: 'small ghost', text: '閉じる', onclick: () => dlg.close() })),
+    el('div', { class: 'dlg-body' },
+      el('div', { class: 'field' }, el('label', { text: label }), name),
+      !isNew && el('div', { class: 'inline' },
+        el('span', { class: 'hint', style: 'margin:0', text: '並び順' }),
+        el('button', { class: 'small', text: '← 左へ', onclick: () => move(-1) }),
+        el('button', { class: 'small', text: '右へ →', onclick: () => move(1) })),
+      !isNew && el('p', { class: 'hint', text: '中の項目を残したまま分類を消したいときは、先に各項目の編集画面で「保存先」を変えてください。' })),
+    el('div', { class: 'dlg-foot' },
+      !isNew && el('button', { class: 'danger ghost', text: '削除', onclick: del }),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'primary', text: isNew ? '追加する' : '変更する', onclick: save })));
+  dlg.showModal();
+  name.focus();
+}
+$('search').addEventListener('input', render);
+
+// ===== コピー（しばらくしたらクリップボードを消去） =====
+let clipUntil = 0;
+async function copyText(t, label) {
+  try {
+    await navigator.clipboard.writeText(t);
+  } catch {
+    const ta = el('textarea', { value: t });
+    document.body.append(ta); ta.select();
+    try { document.execCommand('copy'); } catch {}
+    ta.remove();
+  }
+  clipUntil = Date.now() + 60000;
+  toast(`${label || ''}をコピーしました`);
+}
+// 他のアプリに貼り付けて戻ってきた後などに消去する
+function clearClipIfDue() {
+  if (clipUntil && Date.now() > clipUntil && document.hasFocus() && navigator.clipboard) {
+    navigator.clipboard.writeText('').then(() => { clipUntil = 0; }).catch(() => {});
+  }
+}
+setInterval(clearClipIfDue, 5000);
+
+// ===== パスワード生成 =====
+function randInt(n) {
+  const lim = Math.floor(0x100000000 / n) * n, a = new Uint32Array(1);
+  do crypto.getRandomValues(a); while (a[0] >= lim);
+  return a[0] % n;
+}
+const pick = s => { const c = [...s]; return c[randInt(c.length)]; };
+function generate(o) {
+  const rm = s => o.amb ? s.replace(/[0O1lI]/g, '') : s;
+  let sets = [];
+  if (o.up) sets.push(rm('ABCDEFGHIJKLMNOPQRSTUVWXYZ'));
+  if (o.lo) sets.push(rm('abcdefghijklmnopqrstuvwxyz'));
+  if (o.di) sets.push(rm('0123456789'));
+  if (o.sy) sets.push([...new Set(o.syms.replace(/\s/g, ''))].join(''));
+  sets = sets.filter(s => s.length);
+  if (!sets.length) throw new Error('使う文字の種類を1つ以上選んでください');
+  const len = Math.min(128, Math.max(o.len || 16, sets.length));
+  const out = sets.map(pick);                    // 各種類を最低1文字ずつ
+  const all = sets.join('');
+  while (out.length < len) out.push(pick(all));
+  for (let i = out.length - 1; i > 0; i--) { const j = randInt(i + 1); [out[i], out[j]] = [out[j], out[i]]; }
+  return out.join('');
+}
+function chk(text, on) {
+  const box = el('input', { type: 'checkbox' }); box.checked = on;
+  return { box, label: el('label', { class: 'chk' }, box, text) };
+}
+function genPanel(getTarget) {
+  const len = el('input', { type: 'number', min: 4, max: 128, value: 16, inputMode: 'numeric' });
+  const up = chk('大文字', true), lo = chk('小文字', true), di = chk('数字', true), sy = chk('記号', true);
+  const syms = el('input', { type: 'text', value: '!@#$%&*-_=+?', autocapitalize: 'none', spellcheck: false });
+  const amb = chk('見間違えやすい文字を使わない（0 O 1 l I）', true);
+  return el('div', { class: 'gen' },
+    el('div', { class: 'inline' }, el('label', { text: '文字数' }), len),
+    el('div', { class: 'checks' }, up.label, lo.label, di.label, sy.label),
+    el('div', { class: 'inline' }, el('label', { text: '使ってよい記号' }), syms),
+    amb.label,
+    el('p', { class: 'hint', text: 'サイトの条件（文字数・使える記号）に合わせてください。条件をメモ欄に書いておくと次回迷いません。' }),
+    el('button', { type: 'button', class: 'primary', text: '生成して入力', onclick: () => {
+      try {
+        const t = getTarget();
+        t.val.value = generate({ len: +len.value, up: up.box.checked, lo: lo.box.checked, di: di.box.checked,
+          sy: sy.box.checked, syms: syms.value, amb: amb.box.checked });
+        t.val.dispatchEvent(new Event('input'));
+        toast(`生成して「${t.lab.value || '値'}」に入力しました`);
+      } catch (e) { toast(e.message); }
+    } }));
+}
+
+// ===== 登録・編集 =====
+function normUrl(x) {
+  x = x.trim();
+  if (!x) return '';
+  if (/^https?:\/\//i.test(x)) return x;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(x)) return null;   // javascript: などは拒否
+  return 'https://' + x;
+}
+function openEdit(entry) {
+  const isNew = !entry, v = S.vault, dlg = $('editDlg'), inputs = {};
+  const body = el('div', { class: 'dlg-body' });
+  for (const f of v.fields) {
+    const id = 'f_' + f.id;
+    const common = { id, autocomplete: 'off', autocapitalize: 'none', spellcheck: false };
+    const input = f.type === 'textarea'
+      ? el('textarea', Object.assign({ rows: 4 }, common, { autocapitalize: 'sentences', spellcheck: true }))
+      : el('input', Object.assign({ type: f.type === 'password' ? 'password' : (f.type === 'url' ? 'url' : 'text') }, common));
+    input.value = (entry && entry.values[f.id]) || '';
+    inputs[f.id] = input;
+    const wrap = el('div', { class: 'field' }, el('label', { htmlFor: id, text: f.label }));
+    if (f.type === 'password') {
+      const showBtn = el('button', { type: 'button', class: 'small ghost', text: '表示', onclick: () => {
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        showBtn.textContent = show ? '隠す' : '表示';
+      } });
+      const gen = genPanel(input, showBtn); gen.hidden = true;
+      wrap.append(el('div', { class: 'inline' }, input, showBtn,
+        el('button', { type: 'button', class: 'small', text: '生成', onclick: () => { gen.hidden = !gen.hidden; } })), gen);
+    } else if (f.type === 'url') {
+      wrap.append(el('div', { class: 'inline' }, input,
+        el('button', { type: 'button', class: 'small', text: '開く', onclick: () => {
+          const u = normUrl(input.value);
+          if (u === null) return toast('http:// か https:// で始まるURLにしてください');
+          if (!u) return toast('URLを入力してください');
+          window.open(u, '_blank', 'noopener,noreferrer');
+        } })),
+        el('p', { class: 'hint', text: '公式サイトの正しいURLを登録しておけば、ここからそのまま開けます（偽サイト対策）。' }));
+    } else wrap.append(input);
+    body.append(wrap);
+  }
+
+  // ログイン情報：項目名・値・メモの1行3列（最初は2段、ボタンで追加）
+  const grid = el('div', { class: 'rows-grid' },
+    el('div', { class: 'rh', text: '項目名' }), el('div', { class: 'rh', text: '値' }), el('div', {}), el('div', { class: 'rh', text: 'メモ' }));
+  const rowInputs = [];
+  let lastVal = null;
+  const src = (entry && entry.rows) || [];
+  const examples = ['例：ログインID', '例：パスワード'];
+  const addRow = r => {
+    const i = rowInputs.length;
+    const lab = el('input', { type: 'text', value: r.label || '', placeholder: examples[i] || '', 'aria-label': `${i + 1}段目の項目名` });
+    const val = el('input', { type: 'text', value: r.value || '', autocomplete: 'off', autocapitalize: 'none', spellcheck: false,
+      'aria-label': `${i + 1}段目の値`, onfocus: () => { lastVal = { lab, val }; } });
+    const memo = el('input', { type: 'text', value: r.memo || '', 'aria-label': `${i + 1}段目のメモ` });
+    const sync = () => val.classList.toggle('secret', isSecret(lab.value));
+    lab.addEventListener('input', sync); sync();
+    grid.append(lab, val,
+      el('button', { type: 'button', class: 'small', text: 'コピー', onclick: () => {
+        if (!val.value) return toast('値が空です');
+        copyText(val.value, lab.value || '値');
+      } }), memo);
+    rowInputs.push({ lab, val, memo });
+    return lab;
+  };
+  for (let i = 0; i < Math.max(2, src.length); i++) addRow(src[i] || {});
+  const reveal = chk('値を表示する', false);
+  reveal.box.onchange = () => grid.classList.toggle('reveal', reveal.box.checked);
+  // 生成の入力先：最後に触った値欄 → パスワード系の空欄 → 最初の空欄
+  const getTarget = () => lastVal
+    || rowInputs.find(x => isSecret(x.lab.value) && !x.val.value)
+    || rowInputs.find(x => !x.val.value)
+    || (() => { throw new Error('入力先の値欄をタップしてから生成してください'); })();
+  const gen = genPanel(getTarget); gen.hidden = true;
+  const rowsBlock = el('div', { class: 'field' },
+    el('label', { text: 'ログイン情報' }), grid,
+    el('div', { class: 'rows-tools' },
+      el('button', { type: 'button', class: 'small', text: '＋ 段を追加', onclick: () => {
+        addRow({}).focus();
+      } }),
+      reveal.label,
+      el('button', { type: 'button', class: 'small', text: 'パスワードを生成', onclick: () => { gen.hidden = !gen.hidden; } })),
+    el('p', { class: 'hint', text: '項目名に「パスワード」「暗証」などを含む段は、値が伏せ字になります。生成したパスワードは、最後にタップした値欄に入ります。3つとも空の段は、登録時に自動で消えます。' }),
+    gen);
+  body.insertBefore(rowsBlock, body.children[rowsPos(v.fields)] || null);
+  // 保存先（分類）
+  const startCat = entry ? entry.cat : S.cur;
+  const gSel = el('select', {}, v.groups.map(g => el('option', { value: g.id, text: g.name })));
+  const sSel = el('select', {});
+  const fillSubs = sel => {
+    const g = v.groups.find(x => x.id === gSel.value);
+    sSel.replaceChildren(...g.subs.map(s => el('option', { value: s.id, text: s.name })));
+    if (sel && g.subs.some(s => s.id === sel)) sSel.value = sel;
+  };
+  gSel.value = startCat.g; gSel.onchange = () => fillSubs(); fillSubs(startCat.s);
+  body.append(el('div', { class: 'field' }, el('label', { text: '保存先' }),
+    el('div', { class: 'inline' }, gSel, el('span', { class: 'muted', text: '›' }), sSel)));
+  if (entry && entry.updated) body.append(el('p', { class: 'hint', text: '最終更新：' + fmtDate(entry.updated) }));
+
+  const ok = async () => {
+    const values = {};
+    for (const f of v.fields) {
+      let x = inputs[f.id].value;
+      if (f.type === 'url') {
+        x = normUrl(x);
+        if (x === null) return toast(`「${f.label}」は http:// か https:// で始まるURLにしてください`);
+      }
+      if (x) values[f.id] = x;
+    }
+    const rows = rowInputs.map(x => ({ label: x.lab.value.trim(), value: x.val.value, memo: x.memo.value }))
+      .filter(r => r.label || r.value || r.memo);
+    if (!Object.keys(values).length && !rows.length) return toast('何も入力されていません');
+    const cat = { g: gSel.value, s: sSel.value };
+    if (isNew) { entry = { id: uid(), values, rows, cat, updated: Date.now() }; v.entries.push(entry); }
+    else { entry.values = values; entry.rows = rows; entry.cat = cat; entry.updated = Date.now(); }
+    if (!$('search').value) S.cur = { ...cat };   // 保存先のタブを表示
+    dlg.close(); refresh();
+    await changed();
+    toast(isNew ? '登録しました' : '更新しました');
+  };
+  const del = async () => {
+    if (!confirm('この項目を削除しますか？')) return;
+    v.entries = v.entries.filter(x => x !== entry);
+    dlg.close(); refresh();
+    await changed();
+    toast('削除しました');
+  };
+  dlg.replaceChildren(
+    el('div', { class: 'dlg-head' }, el('h2', { text: isNew ? '新しく登録' : '編集' }), el('div', { class: 'spacer' }),
+      el('button', { class: 'small ghost', text: 'キャンセル', onclick: () => dlg.close() })),
+    body,
+    el('div', { class: 'dlg-foot' },
+      !isNew && el('button', { class: 'danger ghost', text: '削除', onclick: del }),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'primary', text: isNew ? '登録する' : '更新する', onclick: ok })));
+  dlg.showModal();
+  body.scrollTop = 0;
+}
+$('addBtn').onclick = () => openEdit(null);
+
+// ===== バックアップ =====
+async function backup() {
+  const obj = await encryptVault();
+  const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+  const name = `password-notebook_${ymd()}.json`;
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: 'パスワード帳', accept: { 'application/json': ['.json'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+    } catch (e) {
+      if (e.name === 'AbortError') return false;
+      download(blob, name);
+    }
+  } else download(blob, name);
+  meta.lastBackup = Date.now(); meta.changed = false; saveMeta();
+  updateBars();
+  toast('暗号化したバックアップファイルを書き出しました');
+  return true;
+}
+$('backupBtn2').onclick = backup;
+$('lockBtn').onclick = lock;
+
+// ===== 設定 =====
+function typeSelect(val, onchange) {
+  const s = el('select', { onchange }, TYPES.map(([k, l]) => el('option', { value: k, text: l })));
+  s.value = val; return s;
+}
+function openSettings() {
+  const v = S.vault, dlg = $('settingsDlg');
+
+  // バックアップ
+  const lastLine = el('p', { class: 'hint', text: '前回のバックアップ：' + fmtDate(meta.lastBackup) });
+  const bkBtn = el('button', { class: 'primary', text: 'バックアップを書き出す', onclick: async () => {
+    if (await backup()) lastLine.textContent = '前回のバックアップ：' + fmtDate(meta.lastBackup);
+  } });
+
+  // 列の管理
+  const list = el('div', { style: 'display:grid;gap:.45rem' });
+  const draw = () => list.replaceChildren(...v.fields.map((f, i) => el('div', { class: 'field-row' },
+    el('input', { type: 'text', value: f.label, 'aria-label': '列の名前', onchange: ev => {
+      const t = ev.target.value.trim(); if (t) { f.label = t; changed(); render(); } else ev.target.value = f.label;
+    } }),
+    typeSelect(f.type, ev => { f.type = ev.target.value; changed(); render(); }),
+    el('button', { class: 'small ghost', text: '↑', 'aria-label': '上へ', disabled: i === 0, onclick: () => {
+      [v.fields[i - 1], v.fields[i]] = [v.fields[i], v.fields[i - 1]]; changed(); draw(); render(); } }),
+    el('button', { class: 'small ghost', text: '↓', 'aria-label': '下へ', disabled: i === v.fields.length - 1, onclick: () => {
+      [v.fields[i + 1], v.fields[i]] = [v.fields[i], v.fields[i + 1]]; changed(); draw(); render(); } }),
+    el('button', { class: 'small danger ghost', text: '削除', onclick: () => {
+      if (v.fields.length <= 1) return toast('列は最低1つ必要です');
+      if (!confirm(`列「${f.label}」を削除します。この列に入力した内容もすべて消えます。よろしいですか？`)) return;
+      v.fields.splice(i, 1); v.entries.forEach(e => delete e.values[f.id]);
+      changed(); draw(); render();
+    } }))));
+  draw();
+  const newName = el('input', { type: 'text', placeholder: '新しい列の名前（例：秘密の質問）' });
+  const newType = typeSelect('text');
+  const addCol = () => {
+    const n = newName.value.trim(); if (!n) return toast('列の名前を入力してください');
+    v.fields.push({ id: uid(), label: n, type: newType.value });
+    newName.value = ''; changed(); draw(); render();
+    toast(`列「${n}」を追加しました`);
+  };
+
+  // 自動ロック
+  const lockSel = el('select', { onchange: ev => { v.settings.autoLockMin = +ev.target.value; changed(); } },
+    [1, 3, 5, 10, 15, 30, 0].map(m => el('option', { value: m, text: m ? `${m}分操作しなければロック` : '自動ロックしない' })));
+  lockSel.value = String(v.settings.autoLockMin);
+
+  // マスターパスワード変更
+  const cur = el('input', { type: 'password', placeholder: '現在のマスターパスワード', autocomplete: 'current-password' });
+  const n1 = el('input', { type: 'password', placeholder: '新しいマスターパスワード', autocomplete: 'new-password' });
+  const n2 = el('input', { type: 'password', placeholder: '確認のためもう一度', autocomplete: 'new-password' });
+  const chBtn = el('button', { text: 'マスターパスワードを変更', onclick: async () => {
+    if (n1.value.length < 8) return toast('新しいパスワードは8文字以上にしてください');
+    if (n1.value !== n2.value) return toast('確認用のパスワードが一致しません');
+    chBtn.disabled = true;
+    try {
+      try { await decryptObj(await encryptVault(), cur.value); }
+      catch { return toast('現在のマスターパスワードが違います'); }
+      S.salt = crypto.getRandomValues(new Uint8Array(16)); S.iter = ITER;
+      S.key = await deriveKey(n1.value, S.salt, S.iter);
+      cur.value = n1.value = n2.value = '';
+      await changed();
+      toast('変更しました。新しいパスワードでバックアップを書き出しておいてください', 4500);
+    } finally { chBtn.disabled = false; }
+  } });
+
+  // CSV書き出し
+  const exportCSV = () => {
+    if (!confirm('暗号化されていないCSVファイルを書き出します。誰でも中身を読めるので、印刷して控えを作るなどの用途に限り、使い終わったらすぐ削除してください。続けますか？')) return;
+    const name = (e, k) => { const g = v.groups.find(x => x.id === e.cat.g); return k === 'g' ? g.name : g.subs.find(x => x.id === e.cat.s).name; };
+    const R = Math.max(1, ...v.entries.map(e => e.rows.length));
+    const rh = []; for (let i = 1; i <= R; i++) rh.push(`項目${i}`, `値${i}`, `メモ${i}`);
+    const rv = e => { const a = []; for (let i = 0; i < R; i++) { const r = e.rows[i] || {}; a.push(r.label || '', r.value || '', r.memo || ''); } return a; };
+    const rows = [['大分類', '小分類', ...v.fields.map(f => f.label), ...rh],
+      ...v.entries.map(e => [name(e, 'g'), name(e, 's'), ...v.fields.map(f => e.values[f.id] || ''), ...rv(e)])];
+    const csv = rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    download(new Blob(['\uFEFF' + csv], { type: 'text/csv' }), `password-notebook_${ymd()}_平文.csv`);
+  };
+
+  const py = `# pip install cryptography
+import json, base64, getpass
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+d = json.load(open("バックアップファイル.json", encoding="utf-8"))
+pw = getpass.getpass("マスターパスワード: ").encode()
+key = PBKDF2HMAC(hashes.SHA256(), 32, base64.b64decode(d["salt"]), d["iterations"]).derive(pw)
+pt = AESGCM(key).decrypt(base64.b64decode(d["iv"]), base64.b64decode(d["data"]), None)
+print(json.dumps(json.loads(pt), ensure_ascii=False, indent=2))`;
+
+  const body = el('div', { class: 'dlg-body' },
+    el('div', { class: 'set-section' },
+      el('h2', { text: 'バックアップ' }),
+      el('p', { class: 'hint', text: '端末の故障やブラウザのデータ消去に備えて、暗号化したファイルを書き出します。書き出したファイルはGoogleドライブやPCにも置いておくと安心です。' }),
+      lastLine, el('div', {}, bkBtn)),
+    el('div', { class: 'set-section' },
+      el('h2', { text: '列の管理' }),
+      el('p', { class: 'hint', text: '一番上の列が見出しになり、その五十音順で並びます。' }),
+      list,
+      el('div', { class: 'field-row', style: 'grid-template-columns:1fr auto' }, newName,
+        el('button', { class: 'small', text: '追加', onclick: addCol })),
+      el('div', { class: 'inline' }, el('span', { class: 'hint', style: 'margin:0;white-space:nowrap', text: '追加する列の種類' }), newType)),
+    el('div', { class: 'set-section' }, el('h2', { text: '自動ロック' }), lockSel),
+    el('div', { class: 'set-section' },
+      el('h2', { text: 'マスターパスワードの変更' }), cur, n1, n2, el('div', {}, chBtn),
+      el('p', { class: 'hint', text: '以前に書き出したバックアップは古いパスワードのままです。' })),
+    el('div', { class: 'set-section' },
+      el('h2', { text: '紙の控え用' }),
+      el('div', {}, el('button', { class: 'small', text: 'CSVで書き出す（暗号化なし）', onclick: exportCSV }))),
+    el('div', { class: 'set-section' },
+      el('details', {},
+        el('summary', { text: 'このツールが使えなくなったときの取り出し方' }),
+        el('p', { class: 'hint', text: 'バックアップファイルは標準的な方式（PBKDF2-SHA256で鍵を作り、AES-256-GCMで暗号化）です。このツールがなくても、PCのPythonで次のように中身を取り出せます。' }),
+        el('pre', { text: py }))));
+
+  dlg.replaceChildren(
+    el('div', { class: 'dlg-head' }, el('h2', { text: '設定' }), el('div', { class: 'spacer' }),
+      el('button', { class: 'small ghost', text: '閉じる', onclick: () => dlg.close() })),
+    body);
+  dlg.showModal();
+  body.scrollTop = 0;
+}
+$('settingsBtn').onclick = openSettings;
+
+// ===== 自動ロック =====
+let lastAct = Date.now();
+['pointerdown', 'keydown', 'touchstart', 'scroll', 'input'].forEach(ev =>
+  document.addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true }));
+function checkIdle() {
+  if (!S.vault) return;
+  const m = S.vault.settings.autoLockMin;
+  if (m > 0 && Date.now() - lastAct > m * 60000) lock();
+}
+setInterval(checkIdle, 5000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { checkIdle(); setTimeout(clearClipIfDue, 500); }
+});
+
+// 端末に保存できない環境で、未保存のまま閉じようとしたら警告
+window.addEventListener('beforeunload', e => {
+  if (!storageOK && meta.changed && (S.vault || S.lockedObj)) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ===== 起動 =====
+if (!window.crypto || !crypto.subtle) {
+  $('createBox').hidden = false;
+  lockMsg('この開き方では暗号化機能が使えません。https:// のアドレスで開くか、PCのブラウザで直接開いてください。');
+  document.querySelectorAll('#lockScreen button').forEach(b => b.disabled = true);
+} else {
+  loadMeta();
+  S.lockedObj = loadStored();
+  showLockScreen();
+}
+// ホーム画面に追加したときオフラインでも動くようにする
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
