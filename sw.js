@@ -1,6 +1,6 @@
-// パスワード帳：オフラインで動かすための仕組み
+// 自由帳：オフラインで動かすための仕組み
 // ツールを更新したときは VERSION の数字を上げてください（次回起動時に新しい版へ切り替わります）
-const VERSION = 'pw-notebook-v4';
+const VERSION = 'notebook-v6';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

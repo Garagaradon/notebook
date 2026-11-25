@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#2b4c7e">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<title>パスワード帳</title>
+<title>自由帳</title>
 <style>
 :root {
   --bg: #eef1f4;
@@ -306,6 +306,11 @@ label.chk input { width: 1.2rem; height: 1.2rem; min-height: 0; }
   .field-row select { grid-column: 1 / -1; grid-row: 2; }
   .field-row { padding-bottom: .5rem; border-bottom: 1px dashed var(--line); }
 }
+#guideText { min-height: 60vh; font-size: .95rem; line-height: 1.75; }
+@media (max-width: 720px) {
+  #guideDlg .dlg-body { display: flex; flex-direction: column; }
+  #guideText { flex: 1; min-height: 0; }
+}
 pre {
   font-size: .75rem; overflow-x: auto;
   background: var(--stripe); padding: .7rem; border-radius: 6px; margin: .5rem 0 0;
@@ -328,28 +333,25 @@ details summary { cursor: pointer; min-height: 36px; display: flex; align-items:
 
 <div id="lockScreen">
   <div class="lock-card">
-    <h1>パスワード帳</h1>
-    <p class="muted" style="margin:0">データは暗号化してこの端末の中だけに保存します。外部には送信しません。</p>
 
     <section class="box" id="unlockBox" hidden>
-      <h2 style="margin:0">マスターパスワードを入力</h2>
-      <input type="password" id="unlockPw" placeholder="マスターパスワード" autocomplete="current-password">
+      <input type="password" id="unlockPw" placeholder="" aria-label="パスワード" autocomplete="current-password">
       <button class="primary" id="unlockBtn">開く</button>
     </section>
 
     <section class="box" id="createBox" hidden>
       <h2 style="margin:0">新しく作る</h2>
-      <input type="password" id="newPw" placeholder="マスターパスワード（12文字以上がおすすめ）" autocomplete="new-password">
+      <input type="password" id="newPw" placeholder="パスワード（12文字以上がおすすめ）" autocomplete="new-password">
       <input type="password" id="newPw2" placeholder="確認のためもう一度" autocomplete="new-password">
       <button class="primary" id="createBtn">作成する</button>
-      <p class="note">マスターパスワードを忘れると、誰にも中身を取り出せません。紙に書いて自宅の安全な場所に保管してください。</p>
+      <p class="note">このパスワードを忘れると、誰にも中身を取り出せません。紙に書いて自宅の安全な場所に保管してください。</p>
     </section>
 
     <details class="box" id="restoreBox">
       <summary>バックアップファイルから復元</summary>
       <p class="note" id="restoreNote" hidden>この端末にあるデータは、選んだファイルの内容に置き換わります。</p>
       <input type="file" id="restoreFile">
-      <input type="password" id="restorePw" placeholder="そのファイルのマスターパスワード" autocomplete="current-password">
+      <input type="password" id="restorePw" placeholder="そのファイルのパスワード" autocomplete="current-password">
       <button id="restoreBtn">復元する</button>
     </details>
 
@@ -361,7 +363,7 @@ details summary { cursor: pointer; min-height: 36px; display: flex; align-items:
 <div id="app" hidden>
   <div class="topbar">
     <header>
-      <h1>パスワード帳</h1>
+      <h1>自由帳</h1>
       <div class="spacer"></div>
       <button id="lockBtn">ロック</button>
       <button id="settingsBtn">設定</button>
@@ -388,6 +390,7 @@ details summary { cursor: pointer; min-height: 36px; display: flex; align-items:
 <dialog id="editDlg"></dialog>
 <dialog id="settingsDlg"></dialog>
 <dialog id="tabDlg" class="small-dlg"></dialog>
+<dialog id="guideDlg"></dialog>
 <div id="toast" role="status"></div>
 
 <script>
@@ -395,7 +398,8 @@ details summary { cursor: pointer; min-height: 36px; display: flex; align-items:
 
 // ===== 定数・状態 =====
 const ITER = 600000;                 // PBKDF2 の反復回数（総当たり対策）
-const FORMAT = 'pw-notebook';
+const FORMAT = 'notebook';
+const OLD_FORMATS = ['pw-notebook'];
 const KEY = 'pw-notebook-vault';     // 端末に保存する暗号化データ
 const META = 'pw-notebook-meta';     // バックアップ日時など（秘密情報なし）
 const te = new TextEncoder(), td = new TextDecoder();
@@ -484,11 +488,58 @@ async function encryptVault() {
   };
 }
 async function decryptObj(obj, pw) {
-  if (!obj || obj.format !== FORMAT) throw new Error('format');
+  if (!obj || (obj.format !== FORMAT && !OLD_FORMATS.includes(obj.format))) throw new Error('format');
   const salt = unb64(obj.salt);
   const key = await deriveKey(pw, salt, obj.iterations);
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(obj.iv) }, key, unb64(obj.data));
   return { vault: JSON.parse(td.decode(pt)), key, salt, iter: obj.iterations };
+}
+
+// ===== 手順メモ（初期の文面） =====
+function defaultGuide() {
+  const addr = location.protocol === 'https:'
+    ? location.origin + location.pathname.replace(/index\.html$/, '')
+    : 'https://（ユーザー名）.github.io/（リポジトリ名）/';
+  return `【端末を新しくしたとき（機種変更など）】
+1. 古い端末で自由帳を開き、「設定」→「バックアップを書き出す」でファイルを作る。
+   （古い端末が使えないときは、Googleドライブなどに保管している最新のバックアップを使う）
+2. そのファイルをGoogleドライブなどに置き、新しい端末でも取り出せるようにする。
+3. 新しい端末のChromeで次のアドレスを開く。
+   ${addr}
+4. 右上の「︙」→「ホーム画面に追加」（または「アプリをインストール」）。
+5. ホーム画面のアイコンから起動し、「バックアップファイルから復元」を開く。
+6. 手順2のファイルを選び、そのファイルを作ったときのパスワードを入れて「復元する」。
+7. 中身が表示されたら完了。
+   古い端末のデータは、ロック画面の一番下「この端末のデータを削除」で消しておくと安心。
+
+【ツールを更新するとき（GitHub）】
+1. PCで github.com にログインする。
+2. 右上のアイコン →「Your repositories」→ 自由帳のリポジトリを開く。
+3. 「Add file」→「Upload files」に、新しい5ファイルをドラッグする。
+   （index.html / manifest.webmanifest / sw.js / icon-192.png / icon-512.png）
+   同じ名前のファイルは上書きされる。フォルダごとではなくファイルを入れる。
+4. 下の「Commit changes」を押す。
+5. 数分〜10分ほど待ち、スマホで自由帳を2回ほど開き直すと新しい版になる。データはそのまま。
+
+【GitHubの設定を見たい・変えたいとき】
+・公開の設定：リポジトリ画面の上のタブ「Settings」→ 左メニュー「Pages」
+  ※右上のアイコンから入る「Settings」（個人アカウントの設定）とは別物。
+    正しい画面は左上に「ユーザー名 / リポジトリ名」と表示されている。
+・リポジトリ名の変更：リポジトリの「Settings」→「General」の一番上「Repository name」
+  アドレスが変わるので、スマホのアイコンは削除して新しいアドレスから追加し直す。データは消えない。
+・公開／非公開：リポジトリの「Settings」→「General」の一番下「Danger Zone」
+  無料プランでは Public でないと公開できない。
+・二段階認証：右上のアイコン →「Settings」→「Password and authentication」
+
+【バックアップの注意】
+・バックアップファイル（.json）は絶対にGitHubへアップロードしない。
+・保管先はGoogleドライブやPCなど。黄色い帯が出たら書き出す。
+・パスワードを変えたら、新しいパスワードでバックアップを書き出し直す。
+・データは端末ごと・ブラウザごとに別々。別の端末から自分のデータは見えない。
+
+【自分で気づいたこと】
+（ここに自由に書き足してください）
+`;
 }
 
 // ===== データ =====
@@ -500,6 +551,7 @@ function newVault() {
       { id: 'note', label: 'メモ', type: 'textarea' }
     ],
     rowsMigrated: true,
+    guide: defaultGuide(),
     groups: [
       { id: uid(), name: '個人', subs: [{ id: uid(), name: '銀行・お金' }, { id: uid(), name: '買い物' }, { id: uid(), name: 'その他' }] },
       { id: uid(), name: '仕事', subs: [{ id: uid(), name: '全般' }] }
@@ -525,6 +577,7 @@ function normalize(v) {
     v.rowsMigrated = true;
   }
   v.entries.forEach(e => { e.rows = e.rows || []; e.values = e.values || {}; });
+  if (typeof v.guide !== 'string') v.guide = defaultGuide();
   // 分類のない古いデータは「未分類 › 全般」にまとめる
   if (!v.groups || !v.groups.length) v.groups = [{ id: uid(), name: '未分類', subs: [] }];
   v.groups.forEach(g => { if (!g.subs || !g.subs.length) g.subs = [{ id: uid(), name: '全般' }]; });
@@ -621,12 +674,12 @@ $('unlockBtn').onclick = async () => {
     adopt(await decryptObj(S.lockedObj, $('unlockPw').value));
     enterApp();
   } catch {
-    lockMsg('マスターパスワードが違います');
+    lockMsg('パスワードが違います');
   } finally { busy(false); }
 };
 $('createBtn').onclick = async () => {
   const p = $('newPw').value, p2 = $('newPw2').value;
-  if (p.length < 8) return lockMsg('マスターパスワードは8文字以上にしてください（12文字以上がおすすめ）');
+  if (p.length < 8) return lockMsg('パスワードは8文字以上にしてください（12文字以上がおすすめ）');
   if (p !== p2) return lockMsg('確認用のパスワードが一致しません');
   busy(true);
   try {
@@ -656,11 +709,11 @@ $('restoreBtn').onclick = async () => {
     toast('復元しました');
   } catch (e) {
     lockMsg(e.message === 'format' ? 'このツールのバックアップファイルではありません'
-      : 'マスターパスワードが違うか、ファイルが壊れています');
+      : 'パスワードが違うか、ファイルが壊れています');
   } finally { busy(false); }
 };
 $('wipeBtn').onclick = () => {
-  if (!confirm('この端末に保存されているパスワード帳を削除します。バックアップファイルがなければ元に戻せません。削除しますか？')) return;
+  if (!confirm('この端末に保存されているデータを削除します。バックアップファイルがなければ元に戻せません。削除しますか？')) return;
   if (storageOK) { localStorage.removeItem(KEY); localStorage.removeItem(META); }
   S.lockedObj = null; meta = { lastBackup: 0, changed: false };
   showLockScreen();
@@ -1024,10 +1077,10 @@ $('addBtn').onclick = () => openEdit(null);
 async function backup() {
   const obj = await encryptVault();
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
-  const name = `password-notebook_${ymd()}.json`;
+  const name = `notebook_${ymd()}.json`;
   if (window.showSaveFilePicker) {
     try {
-      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: 'パスワード帳', accept: { 'application/json': ['.json'] } }] });
+      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: '自由帳', accept: { 'application/json': ['.json'] } }] });
       const w = await h.createWritable(); await w.write(blob); await w.close();
     } catch (e) {
       if (e.name === 'AbortError') return false;
@@ -1041,6 +1094,38 @@ async function backup() {
 }
 $('backupBtn2').onclick = backup;
 $('lockBtn').onclick = lock;
+
+// ===== 手順メモ =====
+function openGuide() {
+  const v = S.vault, dlg = $('guideDlg');
+  const ta = el('textarea', { id: 'guideText', spellcheck: false });
+  ta.value = v.guide;
+  const modified = () => ta.value !== v.guide;
+  const close = () => { if (modified() && !confirm('書き換えた内容を保存せずに閉じますか？')) return; dlg.close(); };
+  dlg.oncancel = e => { if (modified()) { e.preventDefault(); close(); } };
+  const save = async () => {
+    v.guide = ta.value;
+    dlg.close();
+    await changed();
+    toast('手順メモを保存しました');
+  };
+  const reset = () => {
+    if (!confirm('最初の文面に戻します。書き足した内容は消えます（「保存する」を押すまでは確定しません）。よろしいですか？')) return;
+    ta.value = defaultGuide();
+  };
+  dlg.replaceChildren(
+    el('div', { class: 'dlg-head' }, el('h2', { text: '手順メモ' }), el('div', { class: 'spacer' }),
+      el('button', { class: 'small ghost', text: '閉じる', onclick: close })),
+    el('div', { class: 'dlg-body' },
+      el('p', { class: 'hint', style: 'margin:0', text: 'このメモは自由に書き換えられます。データと一緒に暗号化され、バックアップにも含まれます。' }),
+      ta),
+    el('div', { class: 'dlg-foot' },
+      el('button', { class: 'ghost small', text: '最初の文面に戻す', onclick: reset }),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'primary', text: '保存する', onclick: save })));
+  dlg.showModal();
+  ta.scrollTop = 0;
+}
 
 // ===== 設定 =====
 function typeSelect(val, onchange) {
@@ -1088,17 +1173,17 @@ function openSettings() {
     [1, 3, 5, 10, 15, 30, 0].map(m => el('option', { value: m, text: m ? `${m}分操作しなければロック` : '自動ロックしない' })));
   lockSel.value = String(v.settings.autoLockMin);
 
-  // マスターパスワード変更
-  const cur = el('input', { type: 'password', placeholder: '現在のマスターパスワード', autocomplete: 'current-password' });
-  const n1 = el('input', { type: 'password', placeholder: '新しいマスターパスワード', autocomplete: 'new-password' });
+  // パスワード変更
+  const cur = el('input', { type: 'password', placeholder: '現在のパスワード', autocomplete: 'current-password' });
+  const n1 = el('input', { type: 'password', placeholder: '新しいパスワード', autocomplete: 'new-password' });
   const n2 = el('input', { type: 'password', placeholder: '確認のためもう一度', autocomplete: 'new-password' });
-  const chBtn = el('button', { text: 'マスターパスワードを変更', onclick: async () => {
+  const chBtn = el('button', { text: 'パスワードを変更', onclick: async () => {
     if (n1.value.length < 8) return toast('新しいパスワードは8文字以上にしてください');
     if (n1.value !== n2.value) return toast('確認用のパスワードが一致しません');
     chBtn.disabled = true;
     try {
       try { await decryptObj(await encryptVault(), cur.value); }
-      catch { return toast('現在のマスターパスワードが違います'); }
+      catch { return toast('現在のパスワードが違います'); }
       S.salt = crypto.getRandomValues(new Uint8Array(16)); S.iter = ITER;
       S.key = await deriveKey(n1.value, S.salt, S.iter);
       cur.value = n1.value = n2.value = '';
@@ -1117,7 +1202,7 @@ function openSettings() {
     const rows = [['大分類', '小分類', ...v.fields.map(f => f.label), ...rh],
       ...v.entries.map(e => [name(e, 'g'), name(e, 's'), ...v.fields.map(f => e.values[f.id] || ''), ...rv(e)])];
     const csv = rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\r\n');
-    download(new Blob(['\uFEFF' + csv], { type: 'text/csv' }), `password-notebook_${ymd()}_平文.csv`);
+    download(new Blob(['\uFEFF' + csv], { type: 'text/csv' }), `notebook_${ymd()}_平文.csv`);
   };
 
   const py = `# pip install cryptography
@@ -1127,12 +1212,16 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 d = json.load(open("バックアップファイル.json", encoding="utf-8"))
-pw = getpass.getpass("マスターパスワード: ").encode()
+pw = getpass.getpass("パスワード: ").encode()
 key = PBKDF2HMAC(hashes.SHA256(), 32, base64.b64decode(d["salt"]), d["iterations"]).derive(pw)
 pt = AESGCM(key).decrypt(base64.b64decode(d["iv"]), base64.b64decode(d["data"]), None)
 print(json.dumps(json.loads(pt), ensure_ascii=False, indent=2))`;
 
   const body = el('div', { class: 'dlg-body' },
+    el('div', { class: 'set-section' },
+      el('h2', { text: '手順メモ' }),
+      el('p', { class: 'hint', text: '端末を新しくしたときの設定方法や、GitHubでの更新方法などをまとめています。気づいたことを書き足せます。' }),
+      el('div', {}, el('button', { text: '手順メモを開く', onclick: () => { dlg.close(); openGuide(); } }))),
     el('div', { class: 'set-section' },
       el('h2', { text: 'バックアップ' }),
       el('p', { class: 'hint', text: '端末の故障やブラウザのデータ消去に備えて、暗号化したファイルを書き出します。書き出したファイルはGoogleドライブやPCにも置いておくと安心です。' }),
@@ -1146,7 +1235,7 @@ print(json.dumps(json.loads(pt), ensure_ascii=False, indent=2))`;
       el('div', { class: 'inline' }, el('span', { class: 'hint', style: 'margin:0;white-space:nowrap', text: '追加する列の種類' }), newType)),
     el('div', { class: 'set-section' }, el('h2', { text: '自動ロック' }), lockSel),
     el('div', { class: 'set-section' },
-      el('h2', { text: 'マスターパスワードの変更' }), cur, n1, n2, el('div', {}, chBtn),
+      el('h2', { text: 'パスワードの変更' }), cur, n1, n2, el('div', {}, chBtn),
       el('p', { class: 'hint', text: '以前に書き出したバックアップは古いパスワードのままです。' })),
     el('div', { class: 'set-section' },
       el('h2', { text: '紙の控え用' }),

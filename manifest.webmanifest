@@ -1,6 +1,6 @@
 {
-  "name": "パスワード帳",
-  "short_name": "パスワード帳",
+  "name": "自由帳",
+  "short_name": "自由帳",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
